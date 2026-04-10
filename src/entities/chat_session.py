@@ -1,6 +1,6 @@
 """ChatSession entity."""
 
-from sqlalchemy import Column, Integer
+from sqlalchemy import Column, Integer, BigInteger
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -11,5 +11,5 @@ class ChatSession(Base):
     __tablename__ = 'chat_session'
     
     id = Column(Integer, primary_key=True)
-    chat_id = Column(Integer, unique=True, nullable=False)
+    chat_id = Column(BigInteger, unique=True, nullable=False)
     messages = relationship('ChatMessage', back_populates='session', cascade='all, delete-orphan')
