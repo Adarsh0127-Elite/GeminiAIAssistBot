@@ -46,11 +46,18 @@ class Gemini:
             system_instruction=self.__system_instruction
         )
 
-    def get_chat(self, history: list) -> AsyncChat:
+    def get_chat(self, history: list, user_name: str = None) -> AsyncChat:
+        config = self.__generation_config
+        if user_name:
+            system_instruction = self.__system_instruction + f"\nYou are currently talking to {user_name}."
+            config = self.__generation_config.model_copy(update={
+                "system_instruction": system_instruction
+            })
+
         return self.__client.chats.create(
             model=self.__model_name,
             history=history,
-            config=self.__generation_config,
+            config=config,
         )
 
     async def send_message_stream(self, prompt: str, chat: AsyncChat):

@@ -67,6 +67,8 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         chat_service = ChatService()
         chat_session = await chat_service.get_or_create_session(db, chat_id)
 
+        user_name = message_obj.from_user.first_name if message_obj.from_user else "User"
+
         if telegram_update.edited_message:
             # Handle edited message
             return 'OK'
@@ -88,10 +90,11 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         if message_obj.photo:
             image = await telegram_service.get_image_from_message(message_obj)
             raw_prompt = message_obj.caption or "Describe this image in detail."
-            prompt = raw_prompt.replace(f"@{bot_user.username}", "").strip()
+            raw_prompt = raw_prompt.replace(f"@{bot_user.username}", "").strip()
+            prompt = f"{user_name}: {raw_prompt}"
 
             history = await chat_service.get_chat_history(db, chat_session.id)
-            chat = gemini.get_chat(history=history)
+            chat = gemini.get_chat(history=history, user_name=user_name)
 
             if is_group:
                 full_response = await gemini.send_image(prompt, image, chat)
@@ -106,8 +109,9 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
             await chat_service.add_message(db, chat_session.id, prompt, message_obj.date, "user")
             await chat_service.add_message(db, chat_session.id, response_text, message_obj.date, "model")
         else:
-            chat = gemini.get_chat(history=await chat_service.get_chat_history(db, chat_session.id))
-            prompt = message_obj.text.replace(f"@{bot_user.username}", "").strip() if message_obj.text else ""
+            chat = gemini.get_chat(history=await chat_service.get_chat_history(db, chat_session.id), user_name=user_name)
+            raw_prompt = message_obj.text.replace(f"@{bot_user.username}", "").strip() if message_obj.text else ""
+            prompt = f"{user_name}: {raw_prompt}"
 
             if is_group:
                 full_response = await gemini.send_message(prompt, chat)
