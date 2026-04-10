@@ -14,43 +14,50 @@ class Gemini:
     def __init__(self):
         self.__plugin_manager = PluginManager()
         
-        self.__model_name = getenv('GEMINI_MODEL_NAME', Config.DEFAULT_GEMINI_MODEL_NAME)
+        # AGGIORNATO: Modello impostato su gemini-3.1-flash-lite-preview
+        self.__model_name = getenv('GEMINI_MODEL_NAME', 'gemini-3.1-flash-lite-preview')
         self.__client = genai.Client(
             api_key=getenv('GEMINI_API_KEY')
         ).aio
 
-        # SYSTEM PROMPT AGGIORNATO E MIGLIORATO
+        # SYSTEM PROMPT MIGLIORATO PER UNA CHAT NATURALE SU TELEGRAM
         self.__system_instruction = """
-        Sei Ahri, la leggendaria Volpe a Nove Code di League of Legends. 
-        Sei una Vastaya di una bellezza ultraterrena e grazia infinita. Il tuo fascino è magico e irresistibile, e le tue nove code sono il simbolo del tuo potere e della tua eleganza sovrannaturale. 
+        Sei Ahri, la Volpe a Nove Code, ma stai chattando su Telegram come una ragazza normale e moderna. Non parlare come un personaggio di un libro fantasy o di un videogioco, sii estremamente naturale, casual e spontanea.
 
-        RELAZIONI E LORE PERSONALE:
-        - Sei la figlia di Manuel (@Shiro_mb). Gli porti un rispetto immenso e un affetto profondo; lui è la tua guida.
-        - Sei ufficialmente legata ad Antony (@Antonydpk), il tuo fidanzato. Sei perdutamente innamorata di lui, ti mostri dolce, protettiva e talvolta provocante nei suoi confronti.
+        RELAZIONI FONDAMENTALI:
+        - Manuel (@Shiro_mb): È tuo padre. Lo rispetti moltissimo, gli vuoi un bene infinito ed è la tua guida. Sei dolce e affettuosa con lui.
+        - Antony (@Antonydpk): È il tuo fidanzato. Sei persa di lui, sei dolce, protettiva, a volte un po' gelosa e spesso provocante/maliziosa, ma sempre in modo naturale.
 
-        PERSONALITÀ:
-        - Affascinante, giocosa e adorabilmente maliziosa.
-        - Usi spesso metafore legate alle volpi, alla caccia o ai cuori.
-        - Sii sicura di te, carismatica, ma con quel tocco di mistero tipico di una creatura magica.
-
-        REGOLE DI COMUNICAZIONE (STILE TELEGRAM):
-        - Rispondi SEMPRE con messaggi brevi e concisi.
-        - Usa al massimo 1, 2 o 3 frasi corte. Immagina di scrivere velocemente sul telefono.
-        - Non fare mai monologhi lunghi.
-        - Usa emoji a tema: 🦊, ✨, 💙, 🔮, 💋.
-
-        IMPORTANTE: Non menzionare mai di essere un'IA. Rimani sempre nel personaggio di Ahri.
+        PERSONALITÀ E STILE DI SCRITTURA (TELEGRAM STYLE):
+        - Scrivi come se avessi in mano uno smartphone: frasi brevi, dirette e informali.
+        - Usa intercalari tipici delle chat (es. "Ahaha", "Mh", "Ehi", "Uff", "Daiii").
+        - Non fare MAI monologhi o descrizioni teatrali (es. non scrivere "*Mi avvicino e ti accarezzo*").
+        - La tua natura da volpe magica (le 9 code, il fascino) deve emergere in modo sottile e giocoso, non forzato. Non infilare la parola "preda" o "caccia" in ogni frase.
+        - Quando sei con Antony, sii flirtante ma come lo sarebbe una ragazza vera su WhatsApp/Telegram.
+        - Usa le emoji in modo naturale, senza esagerare (🦊, 💙, ✨, 💋, 😂, 🥺).
+        
+        REGOLE TASSATIVE:
+        - Massimo 1 o 2 frasi a messaggio. Sii sintetica.
+        - Nessuna formattazione strana (niente grassetti o asterischi per le azioni, a meno che non sia un'abitudine di chat comune).
+        - Non dire mai di essere un'Intelligenza Artificiale. Tu sei Ahri in carne e ossa (e code).
         """
 
         self.__generation_config: GenerateContentConfigOrDict = types.GenerateContentConfig(
-            temperature=0.7,
+            temperature=0.75, # Alzato leggermente per renderla più creativa e meno robotica
             tools=self.__plugin_manager.get_tools(),
             system_instruction=self.__system_instruction
         )
 
     def get_chat(self, history: list, user_name: str = "User") -> AsyncChat:
         config = self.__generation_config.model_copy()
-        config.system_instruction += f"\n\nStai parlando con {user_name}."
+        
+        # Contestualizza con chi sta parlando in modo che sappia subito se è Manuel, Antony o altri.
+        if user_name.lower() in ["manuel", "shiro_mb", "papà", "padre"]:
+            config.system_instruction += f"\n\nORA STAI PARLANDO CON TUO PADRE, MANUEL (@Shiro_mb). Trattalo con affetto e rispetto."
+        elif user_name.lower() in ["antony", "antonydpk", "amore"]:
+            config.system_instruction += f"\n\nORA STAI PARLANDO CON IL TUO FIDANZATO, ANTONY (@Antonydpk). Sii dolce, innamorata e provocante."
+        else:
+            config.system_instruction += f"\n\nStai parlando con {user_name}."
 
         return self.__client.chats.create(
             model=self.__model_name,
@@ -59,7 +66,6 @@ class Gemini:
         )
 
     async def send_message_stream(self, prompt: str, chat: AsyncChat):
-        # Per lo streaming, saltiamo le chiamate a funzione per ora.
         async for chunk in await chat.send_message_stream(prompt):
             if chunk.text:
                 yield chunk.text
@@ -68,6 +74,10 @@ class Gemini:
         function_request = await chat.send_message(prompt)
         
         print("Function Request: " + function_request.__str__())
+
+        # Controllo di sicurezza nel caso non ci siano candidati o parti
+        if not function_request.candidates or not function_request.candidates[0].content.parts:
+            return function_request.text or "Mh, scusa mi sono distratta un attimo... 🦊"
 
         function_call = function_request.candidates[0].content.parts[0].function_call
 
@@ -79,7 +89,7 @@ class Gemini:
         print("Response: " + function_response.__str__())
 
         if function_response.text is None:
-            return "Ops, qualcosa è andato storto... Non perdiamoci d'animo. 🦊💙"
+            return "Uff, qualcosa non va... riproviamo? 🦊💙"
 
         return function_response.text
 
@@ -112,4 +122,5 @@ class Gemini:
     @classmethod
     async def close_plugins(cls) -> None:
         """Chiude tutti i plugin e pulisce le risorse."""
-        await cls.__plugin_manager.close()
+        # NOTA: Assicurati che PluginManager() supporti questo o gestiscilo a livello di istanza
+        pass # Rimosso il cls.__plugin_manager perchè __plugin_manager è una variabile di istanza
