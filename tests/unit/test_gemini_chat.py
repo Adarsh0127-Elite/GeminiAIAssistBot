@@ -70,7 +70,8 @@ async def test_get_chat_with_user_name():
     with patch("src.gemini.genai.Client") as mock_client_class:
         mock_aio_client = MagicMock()
         mock_client_class.return_value.aio = mock_aio_client
-        gemini = Gemini()
+        with patch.dict(os.environ, {"GEMINI_MODEL_NAME": "gemini-2.5-flash"}):
+            gemini = Gemini()
 
     mock_history = [{"role": "user", "parts": [{"text": "Hello"}]}]
     user_name = "Mario"

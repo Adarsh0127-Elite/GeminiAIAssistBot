@@ -126,3 +126,22 @@ class ChatService:
             await db.refresh(session)
         
         return session
+
+    async def get_last_bot_message(self, db: AsyncSession, session_id: int) -> ChatMessage | None:
+        """
+        Retrieve the most recent message from the bot ('model' role).
+
+        Args:
+            db: Async database session.
+            session_id: The chat session ID to retrieve the message for.
+
+        Returns:
+            The ChatMessage instance or None if not found.
+        """
+        result = await db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.chat_id == session_id, ChatMessage.role == 'model')
+            .order_by(ChatMessage.date.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()

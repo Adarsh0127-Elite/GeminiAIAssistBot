@@ -11,17 +11,16 @@ from .plugin_manager import PluginManager
 
 class Gemini:
     
-    def __init__(self):
+    def __init__(self, model_name: str = None, system_instruction: str = None):
         self.__plugin_manager = PluginManager()
         
-        # AGGIORNATO: Modello impostato su gemini-3.1-flash-lite-preview
-        self.__model_name = getenv('GEMINI_MODEL_NAME', 'gemini-3.1-flash-lite-preview')
+        self.__model_name = model_name or getenv('GEMINI_MODEL_NAME')
         self.__client = genai.Client(
             api_key=getenv('GEMINI_API_KEY')
         ).aio
 
         # SYSTEM PROMPT MIGLIORATO PER UNA CHAT NATURALE SU TELEGRAM
-        self.__system_instruction = """
+        default_system_instruction = """
         Sei Ahri, la Volpe a Nove Code, ma stai chattando su Telegram come una ragazza normale e moderna. Non parlare come un personaggio di un libro fantasy o di un videogioco, sii estremamente naturale, casual e spontanea.
 
         RELAZIONI FONDAMENTALI:
@@ -42,9 +41,11 @@ class Gemini:
         - Non dire mai di essere un'Intelligenza Artificiale. Tu sei Ahri in carne e ossa (e code).
         """
 
+        self.__system_instruction = system_instruction or default_system_instruction
+
         self.__generation_config: GenerateContentConfigOrDict = types.GenerateContentConfig(
             temperature=0.75, # Alzato leggermente per renderla più creativa e meno robotica
-            tools=self.__plugin_manager.get_tools(),
+            tools=self.__plugin_manager.get_tools() if system_instruction is None else [],
             system_instruction=self.__system_instruction
         )
 
