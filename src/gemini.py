@@ -1,4 +1,4 @@
-Siinydpk os import getenv
+from os import getenv
 
 import PIL.Image
 from google import genai
