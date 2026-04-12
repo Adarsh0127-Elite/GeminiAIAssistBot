@@ -161,6 +161,8 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 print(f"Mem0 search error: {e}")
 
 
+        chat = gemini_chat.get_chat(history=history, user_name=user_name, memory_context=memory_context)
+        
         if message_obj.photo:
             image = await telegram_service.get_image_from_message(message_obj)
             if is_group:
