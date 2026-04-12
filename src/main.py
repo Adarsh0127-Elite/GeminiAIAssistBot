@@ -7,6 +7,8 @@ import time
 import random
 import re
 import anyio
+from sqlalchemy import select
+from src.entities.chat_message import ChatMessage
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -91,6 +93,28 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
         prompt = f"{user_name}: {raw_text}"
 
+        # --- INIZIO FIX: CONTROLLO DUPLICATI (RETRY DI TELEGRAM) ---
+        stmt = select(ChatMessage).where(
+            ChatMessage.chat_id == chat_session.id,
+            ChatMessage.role == 'user',
+            ChatMessage.text == prompt
+        ).order_by(ChatMessage.date.desc()).limit(1)
+
+        result = await db.execute(stmt)
+        last_user_msg = result.scalar_one_or_none()
+
+        if last_user_msg:
+            msg_date = last_user_msg.date
+            if msg_date.tzinfo is None:
+                msg_date = msg_date.replace(tzinfo=timezone.utc)
+
+            diff = (datetime.now(timezone.utc) - msg_date).total_seconds()
+            # Se lo stesso messaggio è arrivato meno di 30 secondi fa, è un retry di Telegram. Lo ignoriamo.
+            if diff < 30:
+                print("Messaggio duplicato (Retry di Telegram). Ignorato.")
+                return 'OK'
+        # --- FINE FIX ---
+
         # Always save user message to history
         await chat_service.add_message(
             db, chat_session.id, prompt, message_obj.date, "user",
@@ -132,10 +156,7 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 return 'OK'
 
         # If we reached here, we respond
-        last_update_time = time.time()
-        update_interval = 0.5
         full_response = ""
-
         # Fetch history (it includes the user message we just added)
         history = await chat_service.get_chat_history(db, chat_session.id)
         # Remove the last message from history because send_message will add it again
@@ -163,38 +184,21 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
         chat = gemini_chat.get_chat(history=history, user_name=user_name, memory_context=memory_context)
         
+        # Invia l'azione "Sta scrivendo..." a Telegram per rassicurare l'utente durante l'attesa
+        await telegram_service._telegram_app_bot.send_chat_action(chat_id=chat_id, action="typing")
+
         if message_obj.photo:
             image = await telegram_service.get_image_from_message(message_obj)
-            if is_group:
-                full_response = await gemini_chat.send_image(prompt, image, chat)
-            else:
-                async for chunk in gemini_chat.send_image_stream(prompt, image, chat):
-                    full_response += chunk
-                    if time.time() - last_update_time > update_interval:
-                        await telegram_service.send_message_draft(chat_id=chat_id, draft_id=message_obj.message_id, text=full_response)
-                        last_update_time = time.time()
+            full_response = await gemini_chat.send_image(prompt, image, chat)
 
         elif message_obj.voice or message_obj.audio:
             audio_data = await telegram_service.get_audio_from_message(message_obj)
             if audio_data:
                 audio_bytes, mime_type = audio_data
-                if is_group:
-                    full_response = await gemini_chat.send_audio(prompt, audio_bytes, mime_type, chat)
-                else:
-                    async for chunk in gemini_chat.send_audio_stream(prompt, audio_bytes, mime_type, chat):
-                        full_response += chunk
-                        if time.time() - last_update_time > update_interval:
-                            await telegram_service.send_message_draft(chat_id=chat_id, draft_id=message_obj.message_id, text=full_response)
-                            last_update_time = time.time()
+                full_response = await gemini_chat.send_audio(prompt, audio_bytes, mime_type, chat)
         else:
-            if is_group:
-                full_response = await gemini_chat.send_message(prompt, chat)
-            else:
-                async for chunk in gemini_chat.send_message_stream(prompt, chat):
-                    full_response += chunk
-                    if time.time() - last_update_time > update_interval:
-                        await telegram_service.send_message_draft(chat_id=chat_id, draft_id=message_obj.message_id, text=full_response)
-                        last_update_time = time.time()
+            # Attendiamo la risposta completa da Gemini (molto più veloce rispetto allo streaming)
+            full_response = await gemini_chat.send_message(prompt, chat)
 
         if full_response:
             await chat_service.add_message(db, chat_session.id, full_response, datetime.now(timezone.utc), "model")
@@ -215,6 +219,7 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 except Exception as e:
                     print(f"Mem0 add error: {e}")
 
+            # Inviamo il messaggio finale a Telegram in una volta sola
             await telegram_service.send_message(chat_id=chat_id, text=full_response, reply_to_message_id=message_obj.message_id)
 
         return 'OK'
