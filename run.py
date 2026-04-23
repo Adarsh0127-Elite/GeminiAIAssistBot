@@ -8,7 +8,6 @@ def setup_menu_commands():
     
     commands = [
         telebot.types.BotCommand("start", "Initialize the bot"),
-        telebot.types.BotCommand("help", "Show available commands and usage"),
         telebot.types.BotCommand("analyze", "Reply to an image/doc to analyze it"),
         telebot.types.BotCommand("authorise", "Grant access to a user/group (Admin)"),
         telebot.types.BotCommand("unauthorise", "Revoke access (Admin)"),

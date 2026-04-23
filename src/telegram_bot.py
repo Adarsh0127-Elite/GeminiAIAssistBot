@@ -14,20 +14,24 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 AUTH_FILE = "/home/adarsh/gemini/authorized.json"
 
 def load_auth():
+    """Loads the list of authorized IDs from the JSON file."""
     if os.path.exists(AUTH_FILE):
         with open(AUTH_FILE, "r") as f:
             return set(json.load(f))
     return set()
 
 def save_auth(auth_set):
+    """Saves the list of authorized IDs to the JSON file."""
     with open(AUTH_FILE, "w") as f:
         json.dump(list(auth_set), f)
 
 AUTHORIZED_IDS = load_auth()
 
 def is_authorized(message):
+    """Checks if the user or the group chat is allowed to use the bot."""
     if message.from_user.id == ADMIN_ID:
         return True
+    # Allow if the specific user is authorized, or if the group chat itself is authorized
     if message.from_user.id in AUTHORIZED_IDS or message.chat.id in AUTHORIZED_IDS:
         return True
     return False
@@ -53,7 +57,7 @@ def authorise_access(message):
         save_auth(AUTHORIZED_IDS)
         bot.reply_to(message, f"✅ Access granted to {target_name}.")
 
-@bot.message_handler(commands=['revoke'])
+@bot.message_handler(commands=['revoke', 'unauthorise'])
 def revoke_access(message):
     if message.from_user.id != ADMIN_ID: return 
 
@@ -119,7 +123,7 @@ def server_status(message):
         reply = (
             f"🖥️ **Advanced Server Telemetry**\n━━━━━━━━━━━━━━━━━━━\n"
             f"**OS:** `{os_name}`\n**Kernel:** `{uname}`\n**Uptime:** `{uptime}`\n\n"
-            f"⚙️ **Compute:**\n• Cores: `{cpu_cores}`\n• Load: `{load_str}`\n\n"
+            f"⚙️ **Compute:**\n• Cores: `{cpu_cores}`\n• Load (1/5/15m): `{load_str}`\n\n"
             f"🧠 **Memory (RAM):**\n• Used: `{ram_used}` / `{ram_total}`\n\n"
             f"💾 **Storage (Root):**\n• Used: `{disk_used}` / `{disk_total}` ({disk_pct})"
         )
@@ -142,12 +146,47 @@ def handle_speedtest(message):
     except Exception as e:
         bot.edit_message_text(f"❌ Speedtest failed: {e}", chat_id=message.chat.id, message_id=status_msg.message_id)
 
-# --- AI COMMANDS ---
+# --- AI COMMANDS (Authorized Users Only) ---
 
-@bot.message_handler(commands=['start', 'help'])
+@bot.message_handler(commands=['start'])
 def send_welcome(message):
+    """Provides a detailed, structured welcome message outlining all capabilities."""
     if not is_authorized(message): return
-    bot.reply_to(message, "🤖 **Advanced Gemini AI Active.**\n\nSend me text, or reply to an image/document with `/analyze [prompt]`.", parse_mode='Markdown')
+    
+    detailed_help = (
+        "🤖 **Westside Systems Assistant | Gemini AI**\n\n"
+        "Welcome! I am an advanced virtual assistant optimized for **systems engineering, AOSP development, Linux administration, and university-level analysis.**\n\n"
+        "How can I assist you today? Here is what I can do:\n━━━━━━━━━━━━━━━━━━━\n\n"
+        "💬 **Conversational AI & Technical Advising:**\n"
+        "- Ask complex technical questions regarding Python, Bash scripting, AOSP debugging, or server configurations.\n"
+        "- Resolve math equations and physics problems (I can render LaTeX!).\n"
+        "- Chat freely; I maintain short-term conversational memory.\n\n"
+        
+        "📂 **Advanced File Analysis:**\n"
+        "*(Works with direct send OR by replying to an existing message)*\n\n"
+        "**1. Multimodal Image Analysis**\n"
+        "- Send or reply to an image with a prompt like:\n"
+        "  └ `/analyze Locate the compiler error in this screenshot.`\n\n"
+        "**2. Document & Log Parsing**\n"
+        "- Send or reply to `.txt`, `.log`, or `.pdf` files.\n"
+        "  - *Reply Example:* (Replying to a build log)\n"
+        "    └ `/analyze Find the linker error.`\n"
+        "  - *Direct Example:* (Caption for a science PDF)\n"
+        "    └ `Summarize this chapter on Optics.`\n\n"
+        
+        "⚙️ **Administrative & Utility Tools:**\n"
+        "- `/speedtest`: Run a network stress test with custom performance UI (Admin Only).\n"
+        "- `/server`: View real-time advanced telemetry (Cores, Load, RAM, Disk usage) (Admin Only).\n"
+        "- `/list`: Display all authorized User/Group IDs (Admin Only).\n"
+        "- `/authorise` / `/unauthorise`: Manage access (Admin Only).\n\n"
+        
+        "🛠️ **Control:**\n"
+        "- `/clear`: Wipe our current conversational context to start a fresh topic.\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "Send your query or upload a file to begin."
+    )
+    
+    bot.reply_to(message, detailed_help, parse_mode='Markdown')
 
 @bot.message_handler(commands=['clear'])
 def clear_history(message):
@@ -218,7 +257,9 @@ def handle_direct_document(message):
     if not is_authorized(message): return
     bot.send_chat_action(message.chat.id, 'typing')
     file_name = message.document.file_name.lower()
-    if not (file_name.endswith('.txt') or file_name.endswith('.log') or file_name.endswith('.pdf')): return
+    
+    if not (file_name.endswith('.txt') or file_name.endswith('.log') or file_name.endswith('.pdf')):
+        return # Ignore silently
 
     try:
         file_info = bot.get_file(message.document.file_id)
@@ -239,6 +280,7 @@ def handle_direct_document(message):
 
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
+    # Ignore messages that start with '/' so it doesn't try to answer invalid commands
     if message.text.startswith('/'): return
     if not is_authorized(message): return
     
