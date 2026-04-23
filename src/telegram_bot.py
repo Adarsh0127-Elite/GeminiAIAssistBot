@@ -11,7 +11,7 @@ from src import gemini_api, speedtest_cmd
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # --- AUTHORIZATION SYSTEM ---
-AUTH_FILE = "/home/adarsh/gemini/authorized.json"
+AUTH_FILE = "/home/adarsh027/GeminiAIAssistBot/authorized.json"
 
 def load_auth():
     """Loads the list of authorized IDs from the JSON file."""
@@ -31,7 +31,6 @@ def is_authorized(message):
     """Checks if the user or the group chat is allowed to use the bot."""
     if message.from_user.id == ADMIN_ID:
         return True
-    # Allow if the specific user is authorized, or if the group chat itself is authorized
     if message.from_user.id in AUTHORIZED_IDS or message.chat.id in AUTHORIZED_IDS:
         return True
     return False
@@ -42,13 +41,26 @@ def is_authorized(message):
 def authorise_access(message):
     if message.from_user.id != ADMIN_ID: return
 
-    target_id, target_name = None, ""
+    target_id = None
+    target_name = ""
+    args = message.text.split()
+
+    # 1. If replying to a user's message
     if message.reply_to_message:
         target_id = message.reply_to_message.from_user.id
-        target_name = message.reply_to_message.from_user.first_name or "User"
+        target_name = message.reply_to_message.from_user.first_name or str(target_id)
+    # 2. If an ID was typed manually (e.g. /authorise 123456)
+    elif len(args) > 1:
+        try:
+            target_id = int(args[1])
+            target_name = f"User ID {target_id}"
+        except ValueError:
+            bot.reply_to(message, "⚠️ Invalid ID format. Please provide a numeric ID.")
+            return
+    # 3. Otherwise, authorize the current chat/group
     else:
         target_id = message.chat.id
-        target_name = message.chat.title or "this private chat"
+        target_name = message.chat.title or "this chat"
 
     if target_id in AUTHORIZED_IDS:
         bot.reply_to(message, f"✅ {target_name} is already authorized.")
@@ -61,10 +73,20 @@ def authorise_access(message):
 def revoke_access(message):
     if message.from_user.id != ADMIN_ID: return 
 
-    target_id, target_name = None, ""
+    target_id = None
+    target_name = ""
+    args = message.text.split()
+
     if message.reply_to_message:
         target_id = message.reply_to_message.from_user.id
-        target_name = message.reply_to_message.from_user.first_name or "User"
+        target_name = message.reply_to_message.from_user.first_name or str(target_id)
+    elif len(args) > 1:
+        try:
+            target_id = int(args[1])
+            target_name = f"User ID {target_id}"
+        except ValueError:
+            bot.reply_to(message, "⚠️ Invalid ID format.")
+            return
     else:
         target_id = message.chat.id
         target_name = message.chat.title or "this chat"
@@ -78,7 +100,7 @@ def revoke_access(message):
         save_auth(AUTHORIZED_IDS)
         bot.reply_to(message, f"🚫 Access revoked for {target_name}.")
     else:
-        bot.reply_to(message, f"⚠️ {target_name} is not in the authorized list.")
+        bot.reply_to(message, f"⚠️ {target_name} is not currently authorized.")
 
 @bot.message_handler(commands=['list'])
 def list_authorized(message):
@@ -173,12 +195,6 @@ def send_welcome(message):
         "    └ `/analyze Find the linker error.`\n"
         "  - *Direct Example:* (Caption for a science PDF)\n"
         "    └ `Summarize this chapter on Optics.`\n\n"
-        
-        "⚙️ **Administrative & Utility Tools:**\n"
-        "- `/speedtest`: Run a network stress test with custom performance UI (Admin Only).\n"
-        "- `/server`: View real-time advanced telemetry (Cores, Load, RAM, Disk usage) (Admin Only).\n"
-        "- `/list`: Display all authorized User/Group IDs (Admin Only).\n"
-        "- `/authorise` / `/unauthorise`: Manage access (Admin Only).\n\n"
         
         "🛠️ **Control:**\n"
         "- `/clear`: Wipe our current conversational context to start a fresh topic.\n\n"

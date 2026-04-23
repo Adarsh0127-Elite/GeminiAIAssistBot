@@ -23,11 +23,11 @@ After=network.target network-online.target
 
 [Service]
 Type=simple
-User=adarsh
-Group=adarsh
-WorkingDirectory=/home/adarsh/gemini
-EnvironmentFile=/home/adarsh/gemini/.env
-ExecStart=/home/adarsh/gemini/venv/bin/python3 /home/adarsh/gemini/run.py
+User=adarsh027
+Group=adarsh027
+WorkingDirectory=/home/adarsh027/GeminiAIAssistBot
+EnvironmentFile=/home/adarsh027/GeminiAIAssistBot/.env
+ExecStart=/home/adarsh027/GeminiAIAssistBot/venv/bin/python3 /home/adarsh027/GeminiAIAssistBot/run.py
 Restart=always
 RestartSec=5
 StandardOutput=syslog
