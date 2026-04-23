@@ -5,7 +5,7 @@
 This project is a chatbot application that uses Google's Generative AI (Gemini) to generate responses. It is built with Python. The chatbot can be interacted via a Telegram bot.
 
 ```bash
-git clone -b main https://github.com/Adarsh0127-Elite/gemini.git gemini
+git clone -b main https://github.com/Adarsh0127-Elite/GeminiAIAssistBot.git
 ```
 ### Install required filea
 ```bash
@@ -43,6 +43,8 @@ nano .env
 ```
 
 ### Copy and Paste all these in .env
+Note: Create a telegram bot using @BotFather after creating Telegram Bot you will get you bot token 
+For your telegram id aka Admin id use @UserInfoToBot
 ```bash
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
 GEMINI_API_KEY=YOUR_API_KEY
@@ -60,6 +62,11 @@ sudo systemctl start geminibot.service
 ### Restart your service
 ```bash
 sudo systemctl restart geminibot.service
+```
+
+### If anything crashes can grab logs using 
+```bash
+sudo journalctl -u geminibot.service -f
 ```
 
 ### Credits:
